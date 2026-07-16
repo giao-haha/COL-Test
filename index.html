@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Cálculo de Asistencia y Nómina v6.5</title>
+    <title>Sistema de Cálculo de Asistencia y Nómina v7.0-T</title>
     <!-- Biblioteca para analizar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     
@@ -76,7 +76,7 @@
 
 <div class="container">
     <h1>
-        <span>Sistema de Cálculo de Asistencia y Nómina v6.4</span>
+        <span>Sistema de Cálculo de Asistencia y Nómina v7.0-T</span>
         <div>
             <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none; font-size: 14px; padding: 8px 15px;">⚙️ Configuración de Horarios</button>
             <button class="btn btn-export" onclick="printAllReports()" id="exportBtn" style="display:none;">🖨️ Imprimir Reportes (Vertical)</button>
@@ -185,7 +185,6 @@
     let globalMealBreakMins = 30;
     let weekendNoBreak = true; 
     
-    // Categorías actualizadas con la opción Exento explícita
     const leaveCategories = ["Permiso", "Incapacidad", "Vacaciones", "Día Festivo", "Falta", "Exento"];
 
     let globalSchedules = {
@@ -254,16 +253,72 @@
 
         Object.keys(pages).forEach(pageNum => {
             let pageItems = pages[pageNum];
+            
+            // --- 终极文本流截取法：名字提取开始 ---
             let empName = "Unknown";
             
-            let trIndex = pageItems.findIndex(i => i.text.includes("EL TRABAJADOR"));
+            // 1. 忽略所有坐标，直接把这页所有的文字按底层原本的顺序提取出来，去掉空白
+            let textSequence = pageItems.map(i => i.text.trim()).filter(t => t !== "");
+
+            // 规则 1: 你们公司的考勤机格式 (抓取 "EL TRABAJADOR" 的前一个词)
+            let trIndex = textSequence.findIndex(t => t.toUpperCase().includes("EL TRABAJADOR"));
             if (trIndex > 0) {
-                let rawName = pageItems[trIndex - 1].text;
-                empName = rawName.replace(/\s*\d+$/, '').trim(); 
+                empName = textSequence[trIndex - 1].replace(/\s*\d+$/, '').trim(); 
             }
+
+            // 规则 2: 第一份 PDF 的格式 (无视坐标，直接在 Fecha/Hora 和 Página 之间强行抠出名字)
+            if (empName === "Unknown" || empName === "") {
+                // 把整页文字用 "|||" 连起来，变成一整句长字符串
+                let joinedText = textSequence.join("|||");
+                
+                // 正则匹配：寻找 "FECHA/HORA: 时间 ||| 名字 ||| PÁGINA" 这个死规律
+                let match = joinedText.match(/FECHA\s*\/\s*HORA:.*?\|\|\|(.*?)\|\|\|P[ÁA]GINA/i);
+                
+                if (match && match[1]) {
+                    empName = match[1].replace(/\s*\d+$/, '').trim();
+                } else {
+                    // 如果正则没抓到，退回到直接找 "Página" 前面那个词的土办法
+                    let pIndex = textSequence.findIndex(t => t.toUpperCase().startsWith("PÁGINA") || t.toUpperCase().startsWith("PAGINA"));
+                    if (pIndex > 0) {
+                        let possibleName = textSequence[pIndex - 1];
+                        if (!possibleName.toUpperCase().includes("FECHA")) {
+                            empName = possibleName.replace(/\s*\d+$/, '').trim();
+                        } else if (pIndex > 2) {
+                            empName = textSequence[pIndex - 2].replace(/\s*\d+$/, '').trim();
+                        }
+                    }
+                }
+            }
+
+            // 规则 3: 预防其他乱七八糟公司的考勤机
+            if (empName === "Unknown" || empName === "") {
+                const nameKeywords = ["NOMBRE:", "EMPLEADO:", "TRABAJADOR:", "COLABORADOR:"];
+                for (let i = 0; i < textSequence.length; i++) {
+                    let text = textSequence[i].toUpperCase();
+                    let foundKeyword = nameKeywords.find(k => text.includes(k));
+                    
+                    if (foundKeyword) {
+                        let matchIndex = text.indexOf(foundKeyword);
+                        let possibleName = textSequence[i].substring(matchIndex + foundKeyword.length).trim();
+                        
+                        if (possibleName === "" && i + 1 < textSequence.length) {
+                            possibleName = textSequence[i + 1].trim();
+                        }
+                        
+                        if (possibleName !== "") {
+                            empName = possibleName.replace(/\s*\d+$/, '').trim();
+                            break;
+                        }
+                    }
+                }
+            }
+
             if (empName === "Unknown" || empName === "") empName = "Empleado Sin Nombre (Pág " + pageNum + ")"; 
+            // --- 终极文本流截取法：名字提取结束 ---
+
             if (!parsedData[empName]) parsedData[empName] = [];
 
+            // --- 下面是原本提取日期和打卡时间的逻辑 ---
             let dateItems = pageItems.filter(i => /^\d{2}\/\d{2}\/\d{4}$/.test(i.text));
             let dateBlocks = [];
             dateItems.forEach(d => {
@@ -471,7 +526,6 @@
                 }
             }
 
-            // 【CORE FIX】: Etiqueta Exento anula el atraso de llegada y las horas extra, PERO MANTIENE la Salida Anticipada.
             if (data.remark === "Exento" || data.remark === "Imprevisto") {
                 dailyLate = 0;
                 dailyOT = 0;
@@ -479,16 +533,16 @@
 
             // --- NUEVA LÓGICA PARA DÍA FESTIVO ---
             if (data.remark === "Día Festivo") {
-                dailyLate = 0;      // Anula atrasos
-                dailyEarly = 0;     // Anula salidas anticipadas
-                dailyOT = 0;        // Anula horas extra
-                workedMins = 0;     // Fuerza el contador a 0h 0m
+                dailyLate = 0;      
+                dailyEarly = 0;     
+                dailyOT = 0;        
+                workedMins = 0;     
             }
 
             let sysCode = "NORMAL", sysText = "Normal";
             
             if (data.remark === "Día Festivo") {
-                sysCode = "NORMAL"; // Esto evita que pida "Completar" o "Corregir"
+                sysCode = "NORMAL"; 
                 sysText = "Festivo (Asistencia Automática)";
             }
             else if (isRestDay) { 
@@ -599,7 +653,6 @@
                     hoursHtml = `<span style="color:#856404; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#856404">(Exento)</span>`;
                 }
             } else if (data.remark === "Día Festivo") {
-                // --- Muestra visualmente las 0h 0m indicando que está pagado ---
                 hoursHtml = `<span style="color:#5cb85c; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#5cb85c">(Pagado)</span>`;
             } else if (effRecord && effRecord.includes("-")) {
                 hoursHtml = `<span class="${isHoursMet ? 'status-normal' : 'status-late'}">${Math.floor(workedMins/60)}h ${workedMins%60}m</span>`;
@@ -757,7 +810,6 @@
                         hoursHtml = `<span style="color:#856404; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#856404">(Exento)</span>`;
                     }
                 } else if (data.remark === "Día Festivo") {
-                    // --- Iguala el formato para el reporte de impresión ---
                     hoursHtml = `<span style="color:#5cb85c; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#5cb85c">(Pagado)</span>`;
                 } else if (effRecord && effRecord.includes("-")) {
                     hoursHtml = `<span style="color:${isHoursMet ? '#5cb85c' : '#d9534f'}; font-weight:bold;">${Math.floor(workedMins/60)}h ${workedMins%60}m</span>`;
