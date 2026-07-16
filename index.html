@@ -1,12 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>考勤薪酬核算系统 v6.4 (终极对冲版)</title>
-    <!-- PDF 解析库 -->
+    <title>Sistema de Cálculo de Asistencia y Nómina v6.3</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background-color: #f5f7fa; color: #333; }
@@ -77,21 +75,21 @@
 
 <div class="container">
     <h1>
-        <span>考勤薪酬自动化核算系统 v6.4</span>
+        <span>Sistema de Cálculo de Asistencia y Nómina v6.3</span>
         <div>
-            <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none; font-size: 14px; padding: 8px 15px;">⚙️ 排班与午休设置</button>
-            <button class="btn btn-export" onclick="printAllReports()" id="exportBtn" style="display:none;">🖨️ 打印全员竖版报表</button>
+            <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none; font-size: 14px; padding: 8px 15px;">⚙️ Configuración de Horarios</button>
+            <button class="btn btn-export" onclick="printAllReports()" id="exportBtn" style="display:none;">🖨️ Imprimir Reportes (Vertical)</button>
         </div>
     </h1>
     
     <div class="settings-panel" id="settingsPanel">
         <div class="settings-header">
-            <h3 style="margin:0; color:#856404;">📅 全局/个人考勤规则配置</h3>
+            <h3 style="margin:0; color:#856404;">📅 Configuración de Reglas de Asistencia</h3>
             <div class="scope-selector">
-                <label for="settingScope">生效范围：</label>
+                <label for="settingScope">Alcance:</label>
                 <select id="settingScope" onchange="switchSettingScope()">
-                    <option value="global">🌍 所有人 (全局默认配置)</option>
-                    <option value="personal">👤 仅当前员工 (<span id="settingEmpNameLabel">--</span>)</option>
+                    <option value="global">🌍 Todos (Predeterminado)</option>
+                    <option value="personal">👤 Solo Empleado Actual (<span id="settingEmpNameLabel">--</span>)</option>
                 </select>
             </div>
         </div>
@@ -99,49 +97,46 @@
         <div class="settings-grid" id="settingsGrid"></div>
         
         <div style="background: white; padding: 15px; border-radius: 4px; border: 1px solid #eee; margin-bottom: 15px;">
-            <strong style="color: #0050b3;">🍽️ 每日默认午休 / 扣除时长：</strong>
-            <input type="number" id="mealBreakInput" value="30" style="width: 80px; padding: 5px;"> 分钟 
-            <span class="empty-cell-text">(计算正常工作日总工时和加班时将自动扣除该时长)</span>
+            <strong style="color: #0050b3;">🍽️ Descanso diario a deducir:</strong>
+            <input type="number" id="mealBreakInput" value="30" style="width: 80px; padding: 5px;"> mins 
+            <span class="empty-cell-text">(Se deducirá del tiempo de trabajo total en días normales)</span>
             
             <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc;">
                 <label style="cursor: pointer; font-weight: bold; color: #d9534f;">
                     <input type="checkbox" id="weekendNoBreakCheckbox" checked> 
-                    🚫 周末 (六、日) 上班不扣除午休时间
+                    🚫 No deducir tiempo de descanso al trabajar en fin de semana (Sáb/Dom)
                 </label>
             </div>
         </div>
 
-        <button class="btn btn-blue" onclick="saveSettings()" style="font-size: 14px; padding: 8px 20px;">💾 保存配置并重算当月考勤</button>
+        <button class="btn btn-blue" onclick="saveSettings()" style="font-size: 14px; padding: 8px 20px;">💾 Guardar Configuración y Recalcular</button>
     </div>
 
     <div class="upload-section">
-        <p>请选择考勤机导出的真实 PDF 文件</p>
+        <p>Por favor, seleccione el archivo PDF exportado del reloj checador</p>
         <input type="file" id="pdfFileInput" accept="application/pdf" />
-        <div id="loading">正在测算网格行高，精准提取物理坐标，请稍候...</div>
+        <div id="loading">Extrayendo datos y procesando coordenadas, por favor espere...</div>
     </div>
 
     <div class="control-panel" id="controlPanel">
         <div class="employee-selector">
-            <label for="empSelect"><strong>选择员工:</strong></label>
+            <label for="empSelect"><strong>Seleccionar Empleado:</strong></label>
             <select id="empSelect" onchange="switchEmployee()"></select>
         </div>
         <div class="employee-name-display">
-            当前查看: <span id="currentName">--</span>
+            Viendo actualmente: <span id="currentName">--</span>
         </div>
     </div>
 
     <div class="dashboard-panel" id="dashboardPanel">
-        <div class="dashboard-title">📊 当月考勤结算总览 (精准对冲计算)</div>
+        <div class="dashboard-title">📊 Resumen Mensual de Asistencia (Cálculo Inteligente)</div>
         <div class="dashboard-grid">
-            <div class="dash-card"><div class="title">✅ 有效出勤天数</div><div class="value val-green" id="dash-normal">0 天</div></div>
-            
-            <!-- 月总工时置顶 -->
-            <div class="dash-card"><div class="title">⏱️ 月总工时</div><div class="value" style="color: #0050b3;" id="dash-total-hours">0h 0m</div></div>
-            
-            <div class="dash-card"><div class="title">⏳ 月累计缺时</div><div class="value val-red" id="dash-late">0 分钟</div></div>
-            <div class="dash-card"><div class="title">💪 月累计加班</div><div class="value val-green" id="dash-ot">0 分钟</div></div>
+            <div class="dash-card"><div class="title">✅ Días Asistidos</div><div class="value val-green" id="dash-normal">0 Días</div></div>
+            <div class="dash-card"><div class="title">⏱️ Horas Totales</div><div class="value" style="color: #0050b3;" id="dash-total-hours">0h 0m</div></div>
+            <div class="dash-card"><div class="title">⏳ Atraso Acumulado</div><div class="value val-red" id="dash-late">0 mins</div></div>
+            <div class="dash-card"><div class="title">💪 Horas Extras</div><div class="value val-green" id="dash-ot">0 mins</div></div>
             <div class="dash-card" style="background: #e6f7ff; border-color: #91d5ff;">
-                <div class="title" style="color: #0050b3; font-weight: bold;">⚖️ 加班抵扣后净值</div>
+                <div class="title" style="color: #0050b3; font-weight: bold;">⚖️ Valor Neto (Extra - Atraso)</div>
                 <div class="value" id="dash-net" style="color: #0050b3;">--</div>
             </div>
         </div>
@@ -150,14 +145,14 @@
     <table id="attendanceTable" style="display:none;">
         <thead>
             <tr>
-                <th>日期</th>
-                <th>星期</th>
-                <th>官方排班</th>
-                <th>实际打卡记录</th>
-                <th>日总工时 (扣午休)</th>
-                <th>系统判定状态</th>
-                <th style="min-width: 150px;">HR 备注 (状态)</th>
-                <th style="min-width: 200px;">快速处理</th>
+                <th>Fecha</th>
+                <th>Día</th>
+                <th>Horario Oficial</th>
+                <th>Registro Real</th>
+                <th>Total Horas</th>
+                <th>Estado del Sistema</th>
+                <th style="min-width: 150px;">Nota RRHH (Estado)</th>
+                <th style="min-width: 200px;">Acción Rápida</th>
             </tr>
         </thead>
         <tbody id="tableBody">
@@ -165,18 +160,15 @@
     </table>
 
     <div id="leaveDetailsPanel" style="display:none; margin-top: 25px; background: #fffbe6; border: 1px solid #ffe58f; padding: 15px; border-radius: 6px;">
-        <div class="dashboard-title" style="color: #856404; margin-bottom: 15px; border-bottom: 1px dashed #ffe58f; padding-bottom: 10px;">🏖️ 特殊状态明细统计</div>
+        <div class="dashboard-title" style="color: #856404; margin-bottom: 15px; border-bottom: 1px dashed #ffe58f; padding-bottom: 10px;">🏖️ Resumen de Permisos y Detalles</div>
         <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;">
-            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">请假</div><div class="value" id="dash-leave-personal" style="font-size: 18px;">0 天</div></div>
-            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">病假</div><div class="value" id="dash-leave-sick" style="font-size: 18px;">0 天</div></div>
-            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">休假/年假</div><div class="value" id="dash-leave-vacation" style="font-size: 18px;">0 天</div></div>
-            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">节假日</div><div class="value" id="dash-leave-festival" style="font-size: 18px;">0 天</div></div>
-            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">缺席 (旷工)</div><div class="value" id="dash-leave-absent" style="font-size: 18px;">0 天</div></div>
-            
-            <!-- 迟到天数移至底部 -->
-            <div class="dash-card" style="background: #fff5f5; border-color: #ffccc7; padding: 10px;"><div class="title" style="color: #d9534f; font-weight:bold;">迟到天数</div><div class="value" id="dash-bottom-late-days" style="font-size: 18px; color: #d9534f;">0 天</div></div>
-            
-            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">其他异常</div><div class="value" id="dash-leave-other" style="font-size: 18px;">0 天</div></div>
+            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">Permiso</div><div class="value" id="dash-leave-personal" style="font-size: 18px;">0 Días</div></div>
+            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">Incapacidad</div><div class="value" id="dash-leave-sick" style="font-size: 18px;">0 Días</div></div>
+            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">Vacaciones</div><div class="value" id="dash-leave-vacation" style="font-size: 18px;">0 Días</div></div>
+            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">Día Festivo</div><div class="value" id="dash-leave-festival" style="font-size: 18px;">0 Días</div></div>
+            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">Falta</div><div class="value" id="dash-leave-absent" style="font-size: 18px;">0 Días</div></div>
+            <div class="dash-card" style="background: #fff5f5; border-color: #ffccc7; padding: 10px;"><div class="title" style="color: #d9534f;">Días de Atraso</div><div class="value" id="dash-bottom-late-days" style="font-size: 18px; color: #d9534f;">0 Días</div></div>
+            <div class="dash-card" style="background: white; border-color: #eee; padding: 10px;"><div class="title">Otras Anomalías</div><div class="value" id="dash-leave-other" style="font-size: 18px;">0 Días</div></div>
         </div>
     </div>
 
@@ -192,16 +184,17 @@
     let globalMealBreakMins = 30;
     let weekendNoBreak = true; 
     
-    const leaveCategories = ["请假", "病假", "休假", "节假日", "缺席", "意外"];
+    // Categorías actualizadas
+    const leaveCategories = ["Permiso", "Incapacidad", "Vacaciones", "Día Festivo", "Falta", "Imprevisto"];
 
     let globalSchedules = {
-        'lunes': { in: "08:30", out: "17:00", name: "星期一 (Lunes)" },
-        'martes': { in: "08:30", out: "17:30", name: "星期二 (Martes)" },
-        'miércoles': { in: "08:30", out: "17:30", name: "星期三 (Miércoles)" },
-        'jueves': { in: "08:30", out: "17:30", name: "星期四 (Jueves)" },
-        'viernes': { in: "08:30", out: "17:30", name: "星期五 (Viernes)" },
-        'sábado': { in: "", out: "", name: "星期六 (Sábado)" },
-        'domingo': { in: "", out: "", name: "星期日 (Domingo)" }
+        'lunes': { in: "08:30", out: "17:00", name: "Lunes" },
+        'martes': { in: "08:30", out: "17:30", name: "Martes" },
+        'miércoles': { in: "08:30", out: "17:30", name: "Miércoles" },
+        'jueves': { in: "08:30", out: "17:30", name: "Jueves" },
+        'viernes': { in: "08:30", out: "17:30", name: "Viernes" },
+        'sábado': { in: "", out: "", name: "Sábado" },
+        'domingo': { in: "", out: "", name: "Domingo" }
     };
     let employeeSchedules = {}; 
 
@@ -246,7 +239,7 @@
                     switchEmployee();
                 }
             } catch (error) {
-                alert("PDF解析失败，请检查文件。");
+                alert("Error al analizar el PDF. Por favor, revise el archivo.");
                 document.getElementById('loading').style.display = 'none';
             }
         };
@@ -267,7 +260,7 @@
                 let rawName = pageItems[trIndex - 1].text;
                 empName = rawName.replace(/\s*\d+$/, '').trim(); 
             }
-            if (empName === "Unknown" || empName === "") empName = "未命名员工 (第 " + pageNum + " 页)"; 
+            if (empName === "Unknown" || empName === "") empName = "Empleado Sin Nombre (Pág " + pageNum + ")"; 
             if (!parsedData[empName]) parsedData[empName] = [];
 
             let dateItems = pageItems.filter(i => /^\d{2}\/\d{2}\/\d{4}$/.test(i.text));
@@ -336,7 +329,7 @@
     function formatMins(mins) {
         const h = Math.floor(Math.abs(mins) / 60);
         const m = Math.abs(mins) % 60;
-        return h > 0 ? `${h}小时 ${m}分钟` : `${m}分钟`;
+        return h > 0 ? `${h}h ${m}m` : `${m}m`;
     }
 
     function toggleSettings() {
@@ -373,7 +366,7 @@
                 globalSchedules[day].in = document.getElementById(`set-in-${day}`).value;
                 globalSchedules[day].out = document.getElementById(`set-out-${day}`).value;
             });
-            alert("✅ 全局排班和午休时间已保存！正在重算所有考勤...");
+            alert("✅ ¡Configuración global guardada! Recalculando asistencias...");
         } else {
             if (!employeeSchedules[currentSelectedEmployee]) employeeSchedules[currentSelectedEmployee] = {};
             Object.keys(globalSchedules).forEach(day => {
@@ -381,7 +374,7 @@
                     in: document.getElementById(`set-in-${day}`).value, out: document.getElementById(`set-out-${day}`).value
                 };
             });
-            alert(`✅ 已为 [${currentSelectedEmployee}] 保存专属排班！`);
+            alert(`✅ ¡Horario personal para [${currentSelectedEmployee}] guardado!`);
         }
         document.getElementById('settingsPanel').style.display = 'none';
         if(currentSelectedEmployee) renderTable(currentSelectedEmployee); 
@@ -390,7 +383,7 @@
     window.switchEmployee = function() {
         currentSelectedEmployee = document.getElementById('empSelect').value;
         document.getElementById('currentName').innerText = currentSelectedEmployee;
-        document.querySelector('#settingScope option[value="personal"]').innerHTML = `👤 仅当前员工 (${currentSelectedEmployee})`;
+        document.querySelector('#settingScope option[value="personal"]').innerHTML = `👤 Solo Empleado Actual (${currentSelectedEmployee})`;
         if(document.getElementById('settingsPanel').style.display === 'block') switchSettingScope();
         renderTable(currentSelectedEmployee);
     }
@@ -407,7 +400,7 @@
     window.handleRemarkChange = function(index) {
         const sel = document.getElementById(`rmk-sel-${index}`);
         const txt = document.getElementById(`rmk-txt-${index}`);
-        if (sel.value === '其他') {
+        if (sel.value === 'Otro') {
             txt.style.display = 'block';
             txt.focus();
         } else {
@@ -419,14 +412,14 @@
     function getActualRemark(index) {
         const sel = document.getElementById(`rmk-sel-${index}`);
         if (!sel) return "";
-        if (sel.value === "其他") return document.getElementById(`rmk-txt-${index}`).value.trim();
+        if (sel.value === "Otro") return document.getElementById(`rmk-txt-${index}`).value.trim();
         return sel.value;
     }
 
     function calculateEmployeeData(empName) {
         const records = employeesData[empName];
         let dashNormal = 0, dashLateDays = 0, sumLateMins = 0, sumOTMins = 0, sumPenaltyMins = 0, sumWorkedMins = 0;
-        let leaveCounts = { '请假': 0, '病假': 0, '休假': 0, '节假日': 0, '缺席': 0, '意外': 0, '其他': 0 };
+        let leaveCounts = { 'Permiso': 0, 'Incapacidad': 0, 'Vacaciones': 0, 'Día Festivo': 0, 'Falta': 0, 'Imprevisto': 0, 'Otro': 0 };
         
         let processedRows = [];
 
@@ -439,8 +432,9 @@
             let isWeekend = (dayKey === 'sábado' || dayKey === 'domingo');
             let currentMealDeduction = (isWeekend && weekendNoBreak) ? 0 : globalMealBreakMins;
 
-            let workedMins = 0, dailyLate = 0, dailyOT = 0, reqMins = 0, dailyPenalty = 0;
+            let workedMins = 0, dailyLate = 0, dailyEarly = 0, dailyOT = 0, reqMins = 0, dailyPenalty = 0;
             
+            // Requerimiento de minutos al día
             if (!isRestDay) {
                 reqMins = getMinutesDiff(schedule.out, schedule.in) - currentMealDeduction;
                 if (reqMins < 0) reqMins = 0;
@@ -456,61 +450,70 @@
                     sM += 10; if(sM >= 60) { sH++; sM -= 60; }
                     let threshT = `${sH.toString().padStart(2,'0')}:${sM.toString().padStart(2,'0')}`;
                     
-                    let isLateMorning = inT > threshT;
-                    let shortMins = reqMins - workedMins;
-
-                    // 核心对冲逻辑：只看总工时是否达标
-                    if (shortMins <= 0) {
-                        dailyOT = Math.abs(shortMins);
+                    if (inT > threshT) dailyLate = getMinutesDiff(inT, threshT);
+                    
+                    if (workedMins >= reqMins) {
+                        dailyOT = workedMins - reqMins;
                         dailyLate = 0; 
                     } else {
-                        dailyLate = shortMins;
-                        data.isEarly = !isLateMorning; // 若早上没迟到但工时不足，记为早退
+                        let endExtra = getMinutesDiff(outT, schedule.out);
+                        if (endExtra > 0 && dailyLate > 0) {
+                            dailyLate = Math.max(0, dailyLate - endExtra);
+                        }
+                        
+                        // NUEVO: Lógica para detectar salida temprana / déficit
+                        if (outT < schedule.out) {
+                            let earlyDiff = getMinutesDiff(schedule.out, outT);
+                            dailyEarly = Math.min(earlyDiff, reqMins - workedMins);
+                        }
                     }
-
                 } else {
                     dailyOT = workedMins; 
                 }
             }
 
-            // 意外免责，直接清空所有不足工时
-            if (data.remark === "意外") {
+            if (data.remark === "Imprevisto") {
                 dailyLate = 0;
+                dailyEarly = 0;
             }
 
-            let sysCode = "NORMAL", sysText = "正常";
+            let sysCode = "NORMAL", sysText = "Normal";
             if (isRestDay) { 
                 sysCode = "WEEKEND"; 
-                sysText = dailyOT > 0 ? `休息日 (加班 ${dailyOT}分钟)` : "休息日"; 
+                sysText = dailyOT > 0 ? `Descanso (Ext ${dailyOT}m)` : "Día de Descanso"; 
             }
-            else if (!effRecord) { sysCode = "EMPTY"; sysText = "无记录"; }
-            else if (!effRecord.includes("-")) { sysCode = "PARTIAL"; sysText = "缺卡异常"; }
+            else if (!effRecord) { sysCode = "EMPTY"; sysText = "Sin Registro"; }
+            else if (!effRecord.includes("-")) { sysCode = "PARTIAL"; sysText = "Falta Marcaje"; }
             else {
                 let texts = [];
-                if (dailyLate > 0) { 
-                    sysCode = "LATE"; 
-                    texts.push(data.isEarly ? `早退/不足 (${dailyLate}分钟)` : `迟到/不足 (${dailyLate}分钟)`); 
-                }
+                if (dailyLate > 0) { sysCode = "LATE"; texts.push(`Atraso (${dailyLate}m)`); }
+                // Incorporamos Salida Anticipada a la interfaz
+                if (dailyEarly > 0) { sysCode = "LATE"; texts.push(`Salida Ant. (${dailyEarly}m)`); }
+                
                 if (dailyOT > 0) { 
                     if (sysCode === "NORMAL") sysCode = "OVERTIME"; 
-                    texts.push(`加班 (${dailyOT}分钟)`); 
+                    texts.push(`Extra (${dailyOT}m)`); 
                 }
-                
                 if (texts.length > 0) {
                     sysText = texts.join(' | ');
                 } else {
-                    sysText = data.remark === "意外" ? "正常 (意外免责)" : "正常";
+                    sysText = data.remark === "Imprevisto" ? "Normal (Imprevisto)" : "Normal";
                 }
             }
 
             let finalCode = data.finalStatus || sysCode;
-            if (finalCode === 'NORMAL' && data.finalStatus) dailyLate = 0; 
             
+            if (finalCode === 'NORMAL' && data.finalStatus) {
+                dailyLate = 0; 
+                dailyEarly = 0;
+            }
             if (finalCode === 'EXCEPTION' && data.finalStatus) {
                 workedMins = 0;
                 dailyLate = 0;
+                dailyEarly = 0;
                 dailyOT = 0;
-                if (data.remark === "请假" || data.remark === "缺席") {
+                
+                if (data.remark === "Permiso" || data.remark === "Falta") {
                     dailyPenalty = reqMins;
                     sumPenaltyMins += dailyPenalty;
                 }
@@ -522,20 +525,21 @@
                     leaveCounts[data.remark]++;
                     matchedLeave = true;
                 } else if (data.remark.trim() !== "") {
-                    leaveCounts['其他']++;
+                    leaveCounts['Otro']++;
                     matchedLeave = true;
                 }
             }
 
             if (finalCode === 'NORMAL' || finalCode === 'OVERTIME' || (finalCode === 'LATE' && !data.finalStatus) || (finalCode === 'WEEKEND' && effRecord)) {
                 if (effRecord) dashNormal++; 
-                sumLateMins += dailyLate; sumOTMins += dailyOT;
+                sumLateMins += (dailyLate + dailyEarly); 
+                sumOTMins += dailyOT;
             } else if (sysCode === 'EMPTY' || sysCode === 'PARTIAL') {
-                if (!matchedLeave) leaveCounts['其他']++;
+                if (!matchedLeave) leaveCounts['Otro']++;
             }
 
-            if (dailyLate > 0 && !data.isEarly) {
-                dashLateDays++; // 只统计真正的迟到天数，不含单纯早退
+            if ((dailyLate > 0 || dailyEarly > 0) && finalCode !== 'EXCEPTION') {
+                dashLateDays++;
             }
 
             sumWorkedMins += workedMins;
@@ -560,8 +564,8 @@
             const { index, data, isRestDay, schedule, effRecord, workedMins, reqMins, dailyPenalty, sysCode, sysText, finalCode, needsAction } = r;
 
             let textHtml = "", rowClass = "";
-            if (finalCode === 'NORMAL' && data.finalStatus) textHtml = `<span class="status-normal">✅ 已核准正常</span>`;
-            else if (finalCode === 'EXCEPTION' && data.finalStatus) textHtml = `<span class="status-late">❌ 已确认异常</span>`;
+            if (finalCode === 'NORMAL' && data.finalStatus) textHtml = `<span class="status-normal">✅ Aprobado Normal</span>`;
+            else if (finalCode === 'EXCEPTION' && data.finalStatus) textHtml = `<span class="status-late">❌ Anomalía Confirmada</span>`;
             else {
                 if (sysCode === 'LATE' || sysCode === 'PARTIAL' || sysCode === 'EMPTY') textHtml = `<span class="status-late">${sysText}</span>`;
                 else if (sysCode === 'NORMAL' || sysCode === 'OVERTIME') textHtml = `<span class="status-normal">${sysText}</span>`;
@@ -571,40 +575,40 @@
                 }
             }
 
-            const officialTimeHTML = isRestDay ? `<span class='empty-cell-text'>休息日</span>` : `${schedule.in}-${schedule.out} ${schedule.isPersonal ? '<span class="personal-badge">专属</span>' : ''}`;
+            const officialTimeHTML = isRestDay ? `<span class='empty-cell-text'>Descanso</span>` : `${schedule.in}-${schedule.out} ${schedule.isPersonal ? '<span class="personal-badge">Personal</span>' : ''}`;
             let isHoursMet = isRestDay ? (workedMins > 0) : (workedMins >= reqMins);
             
             let hoursHtml = `<span class="empty-cell-text">-</span>`;
             if (finalCode === 'EXCEPTION' && data.finalStatus) {
                 if (dailyPenalty > 0) {
-                    hoursHtml = `<span style="color:#d9534f; font-weight:bold;">-${Math.floor(dailyPenalty/60)}h ${dailyPenalty%60}m</span> <span style="font-size:10px;color:#d9534f">(欠工时)</span>`;
+                    hoursHtml = `<span style="color:#d9534f; font-weight:bold;">-${Math.floor(dailyPenalty/60)}h ${dailyPenalty%60}m</span> <span style="font-size:10px;color:#d9534f">(Deducido)</span>`;
                 } else {
-                    hoursHtml = `<span style="color:#856404; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#856404">(免扣)</span>`;
+                    hoursHtml = `<span style="color:#856404; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#856404">(Exento)</span>`;
                 }
             } else if (effRecord && effRecord.includes("-")) {
                 hoursHtml = `<span class="${isHoursMet ? 'status-normal' : 'status-late'}">${Math.floor(workedMins/60)}h ${workedMins%60}m</span>`;
             }
             
-            let recordHtml = data.adjustedRecord ? `<strong>${data.adjustedRecord}</strong> <span style="color:green;font-size:12px;">(补)</span>` : `<strong>${data.record || "(空)"}</strong>`;
+            let recordHtml = data.adjustedRecord ? `<strong>${data.adjustedRecord}</strong> <span style="color:green;font-size:12px;">(Mod)</span>` : `<strong>${data.record || "(Vacío)"}</strong>`;
             
             let selValue = "", txtValue = "";
             if (data.remark) {
                 if (leaveCategories.includes(data.remark)) selValue = data.remark;
-                else { selValue = "其他"; txtValue = data.remark; }
+                else { selValue = "Otro"; txtValue = data.remark; }
             }
 
             let remarkHtml = `
                 <select id="rmk-sel-${index}" class="remark-select" onchange="handleRemarkChange(${index})">
-                    <option value="">- 请选择状态 -</option>
-                    <option value="请假" ${selValue==='请假'?'selected':''}>请假</option>
-                    <option value="病假" ${selValue==='病假'?'selected':''}>病假</option>
-                    <option value="休假" ${selValue==='休假'?'selected':''}>休假</option>
-                    <option value="节假日" ${selValue==='节假日'?'selected':''}>节假日</option>
-                    <option value="缺席" ${selValue==='缺席'?'selected':''}>缺席</option>
-                    <option value="意外" ${selValue==='意外'?'selected':''}>意外 (免除迟到)</option>
-                    <option value="其他" ${selValue==='其他'?'selected':''}>其他 (需填理由)</option>
+                    <option value="">- Seleccione Estado -</option>
+                    <option value="Permiso" ${selValue==='Permiso'?'selected':''}>Permiso</option>
+                    <option value="Incapacidad" ${selValue==='Incapacidad'?'selected':''}>Incapacidad</option>
+                    <option value="Vacaciones" ${selValue==='Vacaciones'?'selected':''}>Vacaciones</option>
+                    <option value="Día Festivo" ${selValue==='Día Festivo'?'selected':''}>Día Festivo</option>
+                    <option value="Falta" ${selValue==='Falta'?'selected':''}>Falta</option>
+                    <option value="Imprevisto" ${selValue==='Imprevisto'?'selected':''}>Imprevisto (Sin Atraso)</option>
+                    <option value="Otro" ${selValue==='Otro'?'selected':''}>Otro (Especifique)</option>
                 </select>
-                <input type="text" id="rmk-txt-${index}" class="remark-input" placeholder="请填写具体理由..." value="${txtValue}" style="display: ${selValue==='其他'?'block':'none'}; width: 100%; box-sizing: border-box;">
+                <input type="text" id="rmk-txt-${index}" class="remark-input" placeholder="Ingrese el motivo..." value="${txtValue}" style="display: ${selValue==='Otro'?'block':'none'}; width: 100%; box-sizing: border-box;">
             `;
 
             let actionHtml = "";
@@ -612,26 +616,26 @@
             let isPartial = effRecord && !effRecord.includes("-");
             
             let hasModified = data.finalStatus || data.adjustedRecord || data.remark;
-            let resetBtnHtml = hasModified ? `<button class="btn btn-warning" style="margin-top:4px;" onclick="resetRow(${index})">🔄 撤销修改</button>` : "";
+            let resetBtnHtml = hasModified ? `<button class="btn btn-warning" style="margin-top:4px;" onclick="resetRow(${index})">🔄 Deshacer</button>` : "";
 
             if (!data.finalStatus) {
                 if (isComplete) {
-                    actionHtml = `<div style="margin-bottom:5px;"><button class="btn btn-blue" onclick="saveRemarkOnly(${index})">💾 保存状态</button></div>` + resetBtnHtml;
+                    actionHtml = `<div style="margin-bottom:5px;"><button class="btn btn-blue" onclick="saveRemarkOnly(${index})">💾 Guardar Estado</button></div>` + resetBtnHtml;
                 } else if (isPartial) {
                     let t = effRecord.replace(/[^\d:]/g, '');
                     let hour = t ? parseInt(t.split(':')[0], 10) : 0;
                     if (hour < 12) {
-                        actionHtml = `<div style="margin-bottom:5px;"><span>${t}</span> - <input type="time" id="out-${index}"><button class="btn btn-blue" onclick="savePartialPunch(${index}, '${t}', 'in')">💾补卡</button></div>`;
+                        actionHtml = `<div style="margin-bottom:5px;"><span>${t}</span> - <input type="time" id="out-${index}"><button class="btn btn-blue" onclick="savePartialPunch(${index}, '${t}', 'in')">💾 Corregir</button></div>`;
                     } else {
-                        actionHtml = `<div style="margin-bottom:5px;"><input type="time" id="in-${index}"> - <span>${t}</span><button class="btn btn-blue" onclick="savePartialPunch(${index}, '${t}', 'out')">💾补卡</button></div>`;
+                        actionHtml = `<div style="margin-bottom:5px;"><input type="time" id="in-${index}"> - <span>${t}</span><button class="btn btn-blue" onclick="savePartialPunch(${index}, '${t}', 'out')">💾 Corregir</button></div>`;
                     }
-                    actionHtml += `<div><button class="btn btn-green" onclick="confirmStatus(${index}, 'NORMAL')">✅设为正常</button> <button class="btn btn-red" onclick="confirmStatus(${index}, 'EXCEPTION')">❌确认异常</button></div>` + resetBtnHtml;
+                    actionHtml += `<div><button class="btn btn-green" onclick="confirmStatus(${index}, 'NORMAL')">✅ Normal</button> <button class="btn btn-red" onclick="confirmStatus(${index}, 'EXCEPTION')">❌ Anomalía</button></div>` + resetBtnHtml;
                 } else {
-                    actionHtml = `<div style="margin-bottom:5px;"><input type="time" id="in-${index}">-<input type="time" id="out-${index}"><button class="btn btn-blue" onclick="savePunch(${index})">💾补全卡</button></div>`;
-                    actionHtml += `<div><button class="btn btn-green" onclick="confirmStatus(${index}, 'NORMAL')">✅设为正常</button> <button class="btn btn-red" onclick="confirmStatus(${index}, 'EXCEPTION')">❌确认异常</button></div>` + resetBtnHtml;
+                    actionHtml = `<div style="margin-bottom:5px;"><input type="time" id="in-${index}">-<input type="time" id="out-${index}"><button class="btn btn-blue" onclick="savePunch(${index})">💾 Completar</button></div>`;
+                    actionHtml += `<div><button class="btn btn-green" onclick="confirmStatus(${index}, 'NORMAL')">✅ Normal</button> <button class="btn btn-red" onclick="confirmStatus(${index}, 'EXCEPTION')">❌ Anomalía</button></div>` + resetBtnHtml;
                 }
             } else {
-                actionHtml = `<div class="empty-cell-text" style="margin-bottom:5px;">已处理完毕</div>` + resetBtnHtml;
+                actionHtml = `<div class="empty-cell-text" style="margin-bottom:5px;">Procesado</div>` + resetBtnHtml;
             }
 
             const tr = document.createElement('tr');
@@ -640,31 +644,31 @@
             tbody.appendChild(tr);
         });
 
-        document.getElementById('dash-normal').innerText = `${result.dashNormal} 天`;
+        document.getElementById('dash-normal').innerText = `${result.dashNormal} Días`;
         document.getElementById('dash-total-hours').innerText = formatMins(result.sumWorkedMins);
         
         document.getElementById('dash-late').innerText = formatMins(result.sumLateMins);
         document.getElementById('dash-ot').innerText = formatMins(result.sumOTMins);
         
-        document.getElementById('dash-leave-personal').innerText = `${result.leaveCounts['请假']} 天`;
-        document.getElementById('dash-leave-sick').innerText = `${result.leaveCounts['病假']} 天`;
-        document.getElementById('dash-leave-vacation').innerText = `${result.leaveCounts['休假']} 天`;
-        document.getElementById('dash-leave-festival').innerText = `${result.leaveCounts['节假日']} 天`;
-        document.getElementById('dash-leave-absent').innerText = `${result.leaveCounts['缺席']} 天`;
+        document.getElementById('dash-leave-personal').innerText = `${result.leaveCounts['Permiso']} Días`;
+        document.getElementById('dash-leave-sick').innerText = `${result.leaveCounts['Incapacidad']} Días`;
+        document.getElementById('dash-leave-vacation').innerText = `${result.leaveCounts['Vacaciones']} Días`;
+        document.getElementById('dash-leave-festival').innerText = `${result.leaveCounts['Día Festivo']} Días`;
+        document.getElementById('dash-leave-absent').innerText = `${result.leaveCounts['Falta']} Días`;
         
-        document.getElementById('dash-bottom-late-days').innerText = `${result.dashLateDays} 天`;
-        document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['其他']} 天`;
+        document.getElementById('dash-bottom-late-days').innerText = `${result.dashLateDays} Días`;
+        document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['Otro']} Días`;
 
         let netEl = document.getElementById('dash-net');
-        if (result.netMins > 0) netEl.innerHTML = `加班结余 <strong class="val-green">${formatMins(result.netMins)}</strong>`;
-        else if (result.netMins < 0) netEl.innerHTML = `欠工时 <strong class="val-red">${formatMins(Math.abs(result.netMins))}</strong>`;
-        else netEl.innerHTML = `<span style="color:#666">恰好抵消 (0分钟)</span>`;
+        if (result.netMins > 0) netEl.innerHTML = `Saldo a favor <strong class="val-green">${formatMins(result.netMins)}</strong>`;
+        else if (result.netMins < 0) netEl.innerHTML = `Horas a deber <strong class="val-red">${formatMins(Math.abs(result.netMins))}</strong>`;
+        else netEl.innerHTML = `<span style="color:#666">Compensado (0 mins)</span>`;
     }
 
     window.printAllReports = function() {
         const loadingOverlay = document.createElement('div');
         loadingOverlay.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#007bff; color:white; padding:15px 30px; border-radius:8px; font-size:16px; font-weight:bold; z-index:10000; box-shadow:0 4px 10px rgba(0,0,0,0.2);';
-        loadingOverlay.innerText = '⏳ 正在为您生成打印版报表，请稍候...';
+        loadingOverlay.innerText = '⏳ Generando reporte de impresión, por favor espere...';
         document.body.appendChild(loadingOverlay);
 
         const exportBox = document.getElementById('pdf-export-container');
@@ -683,29 +687,29 @@
                 empDiv.className = 'page-break'; 
             }
 
-            let netHtml = result.netMins > 0 ? `<span style="color:#5cb85c;font-weight:bold;">加班结余 ${formatMins(result.netMins)}</span>` : 
-                          result.netMins < 0 ? `<span style="color:#d9534f;font-weight:bold;">欠工时 ${formatMins(Math.abs(result.netMins))}</span>` : 
-                          `<span style="color:#666;font-weight:bold;">恰好抵消</span>`;
+            let netHtml = result.netMins > 0 ? `<span style="color:#5cb85c;font-weight:bold;">A favor ${formatMins(result.netMins)}</span>` : 
+                          result.netMins < 0 ? `<span style="color:#d9534f;font-weight:bold;">A deber ${formatMins(Math.abs(result.netMins))}</span>` : 
+                          `<span style="color:#666;font-weight:bold;">Compensado</span>`;
 
             let headerHTML = `
-                <h2 style="border-bottom:2px solid #ddd; padding-bottom:8px; margin-top:0;">👤 员工考勤报表: <span style="color:#0050b3">${empName}</span></h2>
+                <h2 style="border-bottom:2px solid #ddd; padding-bottom:8px; margin-top:0;">👤 Reporte de Asistencia: <span style="color:#0050b3">${empName}</span></h2>
                 <div style="display:flex; justify-content:space-between; margin-bottom:15px; background:#fafafa; padding:10px; border:1px solid #eee; border-radius:6px; font-size:13px;">
-                    <div>✅ 出勤: <strong style="color:#5cb85c">${result.dashNormal}天</strong></div>
-                    <div>⏱️ 月总工时: <strong style="color:#0050b3">${formatMins(result.sumWorkedMins)}</strong></div>
-                    <div>⏳ 缺时总计: <strong style="color:#d9534f">${formatMins(result.sumLateMins)}</strong></div>
-                    <div>💪 加班: <strong style="color:#5cb85c">${formatMins(result.sumOTMins)}</strong></div>
-                    <div>⚖️ 净值: ${netHtml}</div>
+                    <div>✅ Asistencia: <strong style="color:#5cb85c">${result.dashNormal} d</strong></div>
+                    <div>⏱️ Horas Totales: <strong style="color:#0050b3">${formatMins(result.sumWorkedMins)}</strong></div>
+                    <div>⏳ Atraso Total: <strong style="color:#d9534f">${formatMins(result.sumLateMins)}</strong></div>
+                    <div>💪 Extras: <strong style="color:#5cb85c">${formatMins(result.sumOTMins)}</strong></div>
+                    <div>⚖️ Neto: ${netHtml}</div>
                 </div>
                 <table style="width:100%; border-collapse:collapse; font-size:11px; text-align:center;">
                     <thead>
                         <tr style="background-color:#f0f2f5;">
-                            <th style="border:1px solid #ddd; padding:6px;">日期</th>
-                            <th style="border:1px solid #ddd; padding:6px;">星期</th>
-                            <th style="border:1px solid #ddd; padding:6px;">官方排班</th>
-                            <th style="border:1px solid #ddd; padding:6px;">打卡记录</th>
-                            <th style="border:1px solid #ddd; padding:6px;">日工时</th>
-                            <th style="border:1px solid #ddd; padding:6px;">判定状态</th>
-                            <th style="border:1px solid #ddd; padding:6px;">HR 备注</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Fecha</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Día</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Horario Oficial</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Registro Real</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Total Horas</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Estado del Sistema</th>
+                            <th style="border:1px solid #ddd; padding:6px;">Nota RRHH</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -715,8 +719,8 @@
                 const { data, isRestDay, schedule, effRecord, workedMins, reqMins, dailyPenalty, sysCode, sysText, finalCode } = r;
 
                 let textHtml = "", bgStyle = "";
-                if (finalCode === 'NORMAL' && data.finalStatus) textHtml = `<span style="color:#5cb85c;font-weight:bold;">✅ 已核准正常</span>`;
-                else if (finalCode === 'EXCEPTION' && data.finalStatus) textHtml = `<span style="color:#d9534f;font-weight:bold;">❌ 确认异常</span>`;
+                if (finalCode === 'NORMAL' && data.finalStatus) textHtml = `<span style="color:#5cb85c;font-weight:bold;">✅ Aprobado Normal</span>`;
+                else if (finalCode === 'EXCEPTION' && data.finalStatus) textHtml = `<span style="color:#d9534f;font-weight:bold;">❌ Anomalía Confirmada</span>`;
                 else {
                     if (sysCode === 'LATE' || sysCode === 'PARTIAL' || sysCode === 'EMPTY') textHtml = `<span style="color:#d9534f;font-weight:bold;">${sysText}</span>`;
                     else if (sysCode === 'NORMAL' || sysCode === 'OVERTIME') textHtml = `<span style="color:#5cb85c;font-weight:bold;">${sysText}</span>`;
@@ -726,21 +730,21 @@
                     }
                 }
 
-                const offHtml = isRestDay ? "<span style='color:#aaa'>休息日</span>" : `${schedule.in}-${schedule.out}`;
+                const offHtml = isRestDay ? `<span style='color:#aaa'>Descanso</span>` : `${schedule.in}-${schedule.out}`;
                 let isHoursMet = isRestDay ? (workedMins > 0) : (workedMins >= reqMins);
                 
                 let hoursHtml = `<span style="color:#aaa">-</span>`;
                 if (finalCode === 'EXCEPTION' && data.finalStatus) {
                     if (dailyPenalty > 0) {
-                        hoursHtml = `<span style="color:#d9534f; font-weight:bold;">-${Math.floor(dailyPenalty/60)}h ${dailyPenalty%60}m</span> <span style="font-size:10px;color:#d9534f">(欠工时)</span>`;
+                        hoursHtml = `<span style="color:#d9534f; font-weight:bold;">-${Math.floor(dailyPenalty/60)}h ${dailyPenalty%60}m</span> <span style="font-size:10px;color:#d9534f">(Deducido)</span>`;
                     } else {
-                        hoursHtml = `<span style="color:#856404; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#856404">(免扣)</span>`;
+                        hoursHtml = `<span style="color:#856404; font-weight:bold;">0h 0m</span> <span style="font-size:10px;color:#856404">(Exento)</span>`;
                     }
                 } else if (effRecord && effRecord.includes("-")) {
                     hoursHtml = `<span style="color:${isHoursMet ? '#5cb85c' : '#d9534f'}; font-weight:bold;">${Math.floor(workedMins/60)}h ${workedMins%60}m</span>`;
                 }
                 
-                let recHtml = data.adjustedRecord ? `<strong>${data.adjustedRecord}</strong> <span style="color:green;font-size:10px;">(补)</span>` : `<strong>${data.record || ""}</strong>`;
+                let recHtml = data.adjustedRecord ? `<strong>${data.adjustedRecord}</strong> <span style="color:green;font-size:10px;">(Mod)</span>` : `<strong>${data.record || ""}</strong>`;
                 let rmkHtml = data.remark || `<span style="color:#aaa">-</span>`;
 
                 return `<tr style="${bgStyle}">
@@ -756,13 +760,13 @@
 
             let leaveSummaryHTML = `
                 <div style="display:flex; justify-content:space-between; margin-top:15px; background:#fffbe6; padding:10px; border:1px solid #ffe58f; border-radius:6px; font-size:13px;">
-                    <div style="color:#856404; font-weight:bold;">🏖️ 特殊状态分类总计:</div>
-                    <div>请假: <strong>${result.leaveCounts['请假']}天</strong></div>
-                    <div>病假: <strong>${result.leaveCounts['病假']}天</strong></div>
-                    <div>休假: <strong>${result.leaveCounts['休假']}天</strong></div>
-                    <div>节假日: <strong>${result.leaveCounts['节假日']}天</strong></div>
-                    <div>缺席: <strong>${result.leaveCounts['缺席']}天</strong></div>
-                    <div>迟到: <strong style="color:#d9534f">${result.dashLateDays}天</strong></div>
+                    <div style="color:#856404; font-weight:bold;">🏖️ Detalles de Ausencias:</div>
+                    <div>Permiso: <strong>${result.leaveCounts['Permiso']} d</strong></div>
+                    <div>Incapacidad: <strong>${result.leaveCounts['Incapacidad']} d</strong></div>
+                    <div>Vacaciones: <strong>${result.leaveCounts['Vacaciones']} d</strong></div>
+                    <div>Día Festivo: <strong>${result.leaveCounts['Día Festivo']} d</strong></div>
+                    <div>Falta: <strong>${result.leaveCounts['Falta']} d</strong></div>
+                    <div>Días de Atraso: <strong style="color:#d9534f">${result.dashLateDays} d</strong></div>
                 </div>
             `;
 
@@ -777,7 +781,7 @@
     }
 
     window.resetRow = function(index) {
-        if(confirm("确定要撤销该行的所有修改并恢复原始打卡状态吗？")) {
+        if(confirm("¿Está seguro de deshacer todas las modificaciones y restaurar el registro original?")) {
             employeesData[currentSelectedEmployee][index].finalStatus = null;
             employeesData[currentSelectedEmployee][index].adjustedRecord = null;
             employeesData[currentSelectedEmployee][index].remark = "";
@@ -787,17 +791,16 @@
 
     window.saveRemarkOnly = function(index) {
         const remark = getActualRemark(index);
-        if (document.getElementById(`rmk-sel-${index}`).value === "其他" && !remark) { alert("请在文本框内填写【其他】的具体理由！"); return; }
-        
+        if (document.getElementById(`rmk-sel-${index}`).value === "Otro" && !remark) { alert("¡Por favor, ingrese el motivo en el cuadro de texto!"); return; }
         employeesData[currentSelectedEmployee][index].remark = remark;
-        alert("📝 状态/备注已保存！");
+        alert("📝 ¡Estado/Nota guardado con éxito!");
         renderTable(currentSelectedEmployee);
     }
 
     window.confirmStatus = function(index, finalDecision) {
         const remark = getActualRemark(index);
-        if (finalDecision === 'EXCEPTION' && !remark) { alert("确认异常扣除时长时，必须选择状态或填写具体理由！"); return; }
-        if (document.getElementById(`rmk-sel-${index}`).value === "其他" && !remark) { alert("请在文本框内填写【其他】的具体理由！"); return; }
+        if (finalDecision === 'EXCEPTION' && !remark) { alert("Al confirmar la anomalía y deducir horas, ¡debe seleccionar un estado o especificar un motivo!"); return; }
+        if (document.getElementById(`rmk-sel-${index}`).value === "Otro" && !remark) { alert("¡Por favor, ingrese el motivo en el cuadro de texto!"); return; }
         
         employeesData[currentSelectedEmployee][index].finalStatus = finalDecision;
         employeesData[currentSelectedEmployee][index].remark = remark;
@@ -806,7 +809,7 @@
 
     window.savePartialPunch = function(index, existingTime, type) {
         const inputVal = document.getElementById(type === 'in' ? `out-${index}` : `in-${index}`).value;
-        if(!inputVal) { alert("请填写要补齐的时间！"); return; }
+        if(!inputVal) { alert("¡Por favor, ingrese el horario a completar!"); return; }
         
         let inT = type === 'in' ? existingTime : inputVal;
         let outT = type === 'in' ? inputVal : existingTime;
@@ -822,7 +825,7 @@
     window.savePunch = function(index) {
         const inT = document.getElementById(`in-${index}`).value;
         const outT = document.getElementById(`out-${index}`).value;
-        if(!inT || !outT) { alert("请填写完整的上下班时间！"); return; }
+        if(!inT || !outT) { alert("¡Por favor, ingrese ambos horarios (entrada y salida)!"); return; }
 
         employeesData[currentSelectedEmployee][index].adjustedRecord = `${inT}-${outT}`;
         employeesData[currentSelectedEmployee][index].finalStatus = null; 
@@ -835,3 +838,4 @@
 </script>
 </body>
 </html>
+```[cite: 4]
