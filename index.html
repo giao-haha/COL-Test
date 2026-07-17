@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Cálculo de Asistencia y Nómina v7.1-T</title>
+    <title>Sistema de Cálculo de Asistencia y Nómina v7.2-T</title>
     <!-- Biblioteca para analizar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- NUEVO: Biblioteca para analizar Excel (.xls, .xlsx) -->
@@ -78,7 +78,7 @@
 
 <div class="container">
     <h1>
-        <span>Sistema de Cálculo de Asistencia y Nómina v7.1-T</span>
+        <span>Sistema de Cálculo de Asistencia y Nómina v7.2-T</span>
         <div>
             <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none; font-size: 14px; padding: 8px 15px;">⚙️ Configuración de Horarios</button>
             <button class="btn btn-export" onclick="printAllReports()" id="exportBtn" style="display:none;">🖨️ Imprimir Reportes (Vertical)</button>
@@ -192,7 +192,7 @@
     let globalSchedules = {
         'lunes': { in: "08:30", out: "17:00", name: "Lunes" },
         'martes': { in: "08:30", out: "17:30", name: "Martes" },
-        'miércoles': { in: "08:30", out: "17:30", name: "Miércoles" },
+        'miércoles': { in: "08:30", out: "17:30", name: "Miércoles" }, // 正确的拼写
         'jueves': { in: "08:30", out: "17:30", name: "Jueves" },
         'viernes': { in: "08:30", out: "17:30", name: "Viernes" },
         'sábado': { in: "", out: "", name: "Sábado" },
@@ -489,10 +489,21 @@
     }
 
     function normalizeDay(day) {
-        let d = day.trim().toLowerCase();
-        if (d.includes('miercoles') || d.includes('miércoles')) return 'miércoles';
-        if (d.includes('sabado') || d.includes('sábado')) return 'sábado';
-        return d;
+        if (!day) return "";
+        
+        // 核心修复：转小写 -> 剥离所有重音符号 -> 删除所有非字母的隐藏特殊字符
+        let d = day.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
+        
+        // 只要包含了这几个核心字母，无论原本怎么拼错，都强制纠正为标准格式
+        if (d.includes('lun')) return 'lunes';
+        if (d.includes('mar')) return 'martes';
+        if (d.includes('mier')) return 'miércoles';
+        if (d.includes('jue')) return 'jueves';
+        if (d.includes('vie')) return 'viernes';
+        if (d.includes('sab')) return 'sábado';
+        if (d.includes('dom')) return 'domingo';
+        
+        return day.trim().toLowerCase();
     }
 
     function getEffectiveSchedule(empName, dayKey) {
