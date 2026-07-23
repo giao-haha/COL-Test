@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Cálculo de Asistencia y Nómina v8.1_T</title>
+    <title>Sistema de Cálculo de Asistencia y Nómina v8.2_T</title>
     <!-- Biblioteca para analizar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- Biblioteca para analizar Excel (.xls, .xlsx) -->
@@ -194,7 +194,7 @@
 
 <div class="container">
     <h1>
-        <span>☁️ Sistema de Cálculo de Asistencia y Nómina v8.1_T</span>
+        <span>☁️ Sistema de Cálculo de Asistencia y Nómina v8.2_T</span>
         <div style="display: flex; gap: 10px;">
             <button class="btn btn-red" onclick="clearLocalData()" id="clearBtn">🗑️ Borrar</button>
             <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none;">⚙️ Configuración</button>
@@ -215,7 +215,7 @@
             </div>
         </div>
 
-        <!-- 新增：分段排班（Horario Dividido）控制区 -->
+        <!-- 分段排班（Horario Dividido）控制区 -->
         <div style="margin-bottom: 15px; padding: 12px 16px; background: #fff; border: 1px solid #fcd34d; border-radius: var(--radius-md);">
             <label style="font-weight: 600; color: #92400e; display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="splitMonthCheckbox" onchange="switchSettingScope()" style="width:16px; height:16px; accent-color: #d97706;"> 
@@ -327,12 +327,12 @@
     let currentSelectedEmployee = "";
     let globalMealBreakMins = 30;
     let weekendNoBreak = true; 
-    let splitMonthEnabled = false;   // 【新增】是否启用分段排班
-    let splitDayThreshold = 15;      // 【新增】分界点日期
+    let splitMonthEnabled = false;   
+    let splitDayThreshold = 15;      
 
-    const leaveCategories = ["Permiso", "Incapacidad", "Vacaciones", "Día Festivo", "Falta", "Exento"];
+    // 【修改点】加入 Salida Ant. 到状态列表
+    const leaveCategories = ["Permiso", "Incapacidad", "Vacaciones", "Día Festivo", "Falta", "Exento", "Salida Ant."];
     
-    // 全局排班数据结构更新，预留 in2 和 out2
     let globalSchedules = {
         'lunes': { in: "08:30", out: "17:00", in2: "08:30", out2: "15:00", name: "Lunes" },
         'martes': { in: "08:30", out: "17:30", in2: "08:30", out2: "15:30", name: "Martes" },
@@ -568,7 +568,6 @@
         return day.trim().toLowerCase();
     }
 
-    // 【修改】获取当前适用的排班（加入日期判断）
     function getEffectiveSchedule(empName, dayKey, dateStr) {
         let target = (employeeSchedules[empName] && employeeSchedules[empName][dayKey]) 
             ? { ...employeeSchedules[empName][dayKey], isPersonal: true }
@@ -577,7 +576,6 @@
         if (splitMonthEnabled && dateStr) {
             let dayNum = parseInt(dateStr.split('/')[0], 10);
             if (dayNum >= splitDayThreshold) {
-                // 如果启用了分段，且日期过了分界点，则替换 in 和 out
                 target.in = target.in2 !== undefined ? target.in2 : target.in;
                 target.out = target.out2 !== undefined ? target.out2 : target.out;
                 target.isPeriod2 = true; 
@@ -605,7 +603,7 @@
         } else { panel.style.display = 'none'; }
     }
 
-    // 【修改】设置 UI 渲染，支持并排显示两套时间
+    // 【修改点】解决卡片穿模的垂直堆叠布局
     function switchSettingScope() {
         const scope = document.getElementById('settingScope').value;
         const isSplit = document.getElementById('splitMonthCheckbox').checked;
@@ -614,7 +612,6 @@
         const grid = document.getElementById('settingsGrid');
         grid.innerHTML = '';
         
-        // 统一卡片最小宽度，不再强行加宽
         grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
 
         let targetSchedule = scope === 'global' ? globalSchedules : (employeeSchedules[currentSelectedEmployee] || globalSchedules);
@@ -625,7 +622,6 @@
             let out2 = data.out2 !== undefined ? data.out2 : data.out;
 
             if (isSplit) {
-                // 如果开启了分段，改为上下垂直排列 (flex-direction: column)
                 grid.innerHTML += `
                     <div class="setting-item" style="padding: 16px;">
                         <strong style="color:var(--text-main); font-size:15px; margin-bottom: 8px;">${globalSchedules[day].name}</strong>
@@ -649,7 +645,6 @@
                         </div>
                     </div>`;
             } else {
-                // 没开启分段时的常规显示
                 grid.innerHTML += `
                     <div class="setting-item">
                         <strong style="color:var(--text-main); font-size:14px;">${globalSchedules[day].name}</strong>
@@ -732,16 +727,17 @@
         return sel.value;
     }
 
-    // 【修改】在计算考勤时，将 date 传递进去
     function calculateEmployeeData(empName) {
         const records = employeesData[empName] || [];
         let dashNormal = 0, dashLateDays = 0, sumLateMins = 0, sumOTMins = 0, sumPenaltyMins = 0, sumWorkedMins = 0;
-        let leaveCounts = { 'Permiso': 0, 'Incapacidad': 0, 'Vacaciones': 0, 'Día Festivo': 0, 'Falta': 0, 'Exento': 0, 'Otro': 0 };
+        
+        // 【修改点】统计增加 Salida Ant.
+        let leaveCounts = { 'Permiso': 0, 'Incapacidad': 0, 'Vacaciones': 0, 'Día Festivo': 0, 'Falta': 0, 'Exento': 0, 'Salida Ant.': 0, 'Otro': 0 };
         let processedRows = [];
 
         records.forEach((data, index) => {
             const dayKey = normalizeDay(data.day);
-            const schedule = getEffectiveSchedule(empName, dayKey, data.date); // 传入日期字符串
+            const schedule = getEffectiveSchedule(empName, dayKey, data.date); 
             const isRestDay = !schedule.in || !schedule.out;
             let effRecord = data.adjustedRecord || data.record;
             let isWeekend = (dayKey === 'sábado' || dayKey === 'domingo');
@@ -775,7 +771,9 @@
                 } else { dailyOT = workedMins; }
             }
 
-            if (data.remark === "Exento" || data.remark === "Imprevisto") { dailyLate = 0; dailyOT = 0; }
+            // 【修改点】免除早退计算逻辑
+            if (data.remark === "Exento" || data.remark === "Imprevisto") { dailyLate = 0; dailyEarly = 0; dailyOT = 0; }
+            if (data.remark === "Salida Ant.") { dailyEarly = 0; }
             if (data.remark === "Día Festivo") { dailyLate = 0; dailyEarly = 0; dailyOT = 0; workedMins = 0; }
 
             let sysCode = "NORMAL", sysText = "Normal";
@@ -788,8 +786,14 @@
                 if (dailyLate > 0) { sysCode = "LATE"; texts.push(`Atraso (${dailyLate}m)`); }
                 if (dailyEarly > 0) { sysCode = "LATE"; texts.push(`Salida Ant. (${dailyEarly}m)`); }
                 if (dailyOT > 0) { if (sysCode === "NORMAL") sysCode = "OVERTIME"; texts.push(`Extra (${dailyOT}m)`); }
+                
+                // 【修改点】系统文字状态判断
                 if (texts.length > 0) sysText = texts.join(' | ');
-                else sysText = (data.remark === "Exento" || data.remark === "Imprevisto") ? "Normal (Exento L.T/Ext)" : "Normal";
+                else {
+                    if (data.remark === "Exento" || data.remark === "Imprevisto") sysText = "Normal (Exento L.T/Ext)";
+                    else if (data.remark === "Salida Ant.") sysText = "Normal (Exento Sal. Ant.)";
+                    else sysText = "Normal";
+                }
             }
 
             let finalCode = data.finalStatus || sysCode;
@@ -852,7 +856,6 @@
                 }
             }
 
-            // 【修改】加入 Period 2 的小 Badge
             let extraBadges = "";
             if (schedule.isPersonal) extraBadges += '<span class="personal-badge">Personal</span>';
             if (schedule.isPeriod2) extraBadges += '<span class="period-badge">P2</span>';
@@ -878,6 +881,7 @@
                 else { selValue = "Otro"; txtValue = data.remark; }
             }
 
+            // 【修改点】选择框加入 Exento Salida Ant.
             let remarkHtml = `
                 <select id="rmk-sel-${index}" class="remark-select" onchange="handleRemarkChange(${index})">
                     <option value="">- Seleccionar -</option>
@@ -887,6 +891,7 @@
                     <option value="Día Festivo" ${selValue==='Día Festivo'?'selected':''}>Día Festivo</option>
                     <option value="Falta" ${selValue==='Falta'?'selected':''}>Falta</option>
                     <option value="Exento" ${selValue==='Exento'?'selected':''}>Exento (Anular Atraso)</option>
+                    <option value="Salida Ant." ${selValue==='Salida Ant.'?'selected':''}>Exento Salida Ant.</option>
                     <option value="Otro" ${selValue==='Otro'?'selected':''}>Otro (Especifique)</option>
                 </select>
                 <input type="text" id="rmk-txt-${index}" placeholder="Ingrese motivo..." value="${txtValue}" style="display: ${selValue==='Otro'?'block':'none'}; width: 100%;">
@@ -940,7 +945,9 @@
         document.getElementById('dash-leave-festival').innerText = `${result.leaveCounts['Día Festivo']} Días`;
         document.getElementById('dash-leave-absent').innerText = `${result.leaveCounts['Falta']} Días`;
         document.getElementById('dash-bottom-late-days').innerText = `${result.dashLateDays} Días`;
-        document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['Exento'] + result.leaveCounts['Otro']} Días`;
+        
+        // 【修改点】看板中加入 Salida Ant.
+        document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['Exento'] + result.leaveCounts['Salida Ant.'] + result.leaveCounts['Otro']} Días`;
 
         let netEl = document.getElementById('dash-net');
         let pCard = netEl.parentElement;
@@ -1032,6 +1039,7 @@
                 </tr>`;
             }).join('');
 
+            // 【修改点】打印报告中加入 Salida Ant.
             let leaveSummaryHTML = `
                 <div style="display:flex; justify-content:space-between; margin-top:15px; background:#fffbeb; padding:12px; border:1px solid #fde68a; border-radius:8px; font-size:13px;">
                     <div style="color:#b45309; font-weight:bold;">🏖️ Ausencias:</div>
@@ -1040,7 +1048,7 @@
                     <div>Vacaciones: <strong>${result.leaveCounts['Vacaciones']} d</strong></div>
                     <div>Festivo: <strong>${result.leaveCounts['Día Festivo']} d</strong></div>
                     <div>Falta: <strong>${result.leaveCounts['Falta']} d</strong></div>
-                    <div>Otras: <strong>${result.leaveCounts['Exento'] + result.leaveCounts['Otro']} d</strong></div>
+                    <div>Otras: <strong>${result.leaveCounts['Exento'] + result.leaveCounts['Salida Ant.'] + result.leaveCounts['Otro']} d</strong></div>
                 </div>`;
             empDiv.innerHTML = headerHTML + rowsHTML + `</tbody></table>` + leaveSummaryHTML;
             exportBox.appendChild(empDiv);
@@ -1052,7 +1060,7 @@
         const dataToSave = { 
             employeesData, globalSchedules, employeeSchedules, 
             globalMealBreakMins, weekendNoBreak, 
-            splitMonthEnabled, splitDayThreshold  // 【新增】保存分段排班设置
+            splitMonthEnabled, splitDayThreshold  
         };
         localStorage.setItem('asistenciaSystemData', JSON.stringify(dataToSave));
     }
@@ -1068,7 +1076,6 @@
                 globalMealBreakMins = parsed.globalMealBreakMins !== undefined ? parsed.globalMealBreakMins : 30;
                 weekendNoBreak = parsed.weekendNoBreak !== undefined ? parsed.weekendNoBreak : true;
                 
-                // 【新增】恢复分段排班设置
                 splitMonthEnabled = parsed.splitMonthEnabled || false;
                 splitDayThreshold = parsed.splitDayThreshold || 15;
                 document.getElementById('splitMonthCheckbox').checked = splitMonthEnabled;
