@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Cálculo de Asistencia y Nómina v8.2</title>
+    <title>Sistema de Cálculo de Asistencia y Nómina v8.3</title>
     <!-- Biblioteca para analizar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- Biblioteca para analizar Excel (.xls, .xlsx) -->
@@ -194,7 +194,7 @@
 
 <div class="container">
     <h1>
-        <span>☁️ Sistema de Cálculo de Asistencia y Nómina v8.2</span>
+        <span>☁️ Sistema de Cálculo de Asistencia y Nómina v8.3</span>
         <div style="display: flex; gap: 10px;">
             <button class="btn btn-red" onclick="clearLocalData()" id="clearBtn">🗑️ Borrar</button>
             <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none;">⚙️ Configuración</button>
@@ -330,7 +330,6 @@
     let splitMonthEnabled = false;   
     let splitDayThreshold = 15;      
 
-    // 【修改点】加入 Salida Ant. 到状态列表
     const leaveCategories = ["Permiso", "Incapacidad", "Vacaciones", "Día Festivo", "Falta", "Exento", "Salida Ant."];
     
     let globalSchedules = {
@@ -603,7 +602,6 @@
         } else { panel.style.display = 'none'; }
     }
 
-    // 【修改点】解决卡片穿模的垂直堆叠布局
     function switchSettingScope() {
         const scope = document.getElementById('settingScope').value;
         const isSplit = document.getElementById('splitMonthCheckbox').checked;
@@ -713,25 +711,38 @@
         });
     }
 
+    // 【核心修改点】让 Exento 和 Salida Ant. 也能唤出输入框
     window.handleRemarkChange = function(index) {
         const sel = document.getElementById(`rmk-sel-${index}`);
         const txt = document.getElementById(`rmk-txt-${index}`);
-        if (sel.value === 'Otro') { txt.style.display = 'block'; txt.focus(); } 
-        else { txt.style.display = 'none'; txt.value = ''; }
+        if (sel.value === 'Otro' || sel.value === 'Exento' || sel.value === 'Salida Ant.') { 
+            txt.style.display = 'block'; 
+            txt.focus(); 
+        } 
+        else { 
+            txt.style.display = 'none'; 
+            txt.value = ''; 
+        }
     }
 
+    // 【核心修改点】获取带原因的数据：比如 "Exento - Cita medica"
     function getActualRemark(index) {
         const sel = document.getElementById(`rmk-sel-${index}`);
         if (!sel) return "";
-        if (sel.value === "Otro") return document.getElementById(`rmk-txt-${index}`).value.trim();
-        return sel.value;
+        let val = sel.value;
+        let txt = document.getElementById(`rmk-txt-${index}`).value.trim();
+        
+        if (val === "Otro") return txt;
+        if ((val === "Exento" || val === "Salida Ant.") && txt !== "") {
+            return `${val} - ${txt}`; // 用连字符拼接类别和具体原因
+        }
+        return val;
     }
 
     function calculateEmployeeData(empName) {
         const records = employeesData[empName] || [];
         let dashNormal = 0, dashLateDays = 0, sumLateMins = 0, sumOTMins = 0, sumPenaltyMins = 0, sumWorkedMins = 0;
         
-        // 【修改点】统计增加 Salida Ant.
         let leaveCounts = { 'Permiso': 0, 'Incapacidad': 0, 'Vacaciones': 0, 'Día Festivo': 0, 'Falta': 0, 'Exento': 0, 'Salida Ant.': 0, 'Otro': 0 };
         let processedRows = [];
 
@@ -771,9 +782,12 @@
                 } else { dailyOT = workedMins; }
             }
 
-            // 【修改点】免除早退计算逻辑
-            if (data.remark === "Exento" || data.remark === "Imprevisto") { dailyLate = 0; dailyEarly = 0; dailyOT = 0; }
-            if (data.remark === "Salida Ant.") { dailyEarly = 0; }
+            // 【核心修改点】引擎识别：无论你带了什么原因，只要它以 "Exento" 开头，就依然按免除规则计算
+            let isExento = data.remark && (data.remark === "Exento" || data.remark.startsWith("Exento -") || data.remark === "Imprevisto");
+            let isSalidaAnt = data.remark && (data.remark === "Salida Ant." || data.remark.startsWith("Salida Ant. -"));
+            
+            if (isExento) { dailyLate = 0; dailyEarly = 0; dailyOT = 0; }
+            if (isSalidaAnt) { dailyEarly = 0; }
             if (data.remark === "Día Festivo") { dailyLate = 0; dailyEarly = 0; dailyOT = 0; workedMins = 0; }
 
             let sysCode = "NORMAL", sysText = "Normal";
@@ -787,11 +801,10 @@
                 if (dailyEarly > 0) { sysCode = "LATE"; texts.push(`Salida Ant. (${dailyEarly}m)`); }
                 if (dailyOT > 0) { if (sysCode === "NORMAL") sysCode = "OVERTIME"; texts.push(`Extra (${dailyOT}m)`); }
                 
-                // 【修改点】系统文字状态判断
                 if (texts.length > 0) sysText = texts.join(' | ');
                 else {
-                    if (data.remark === "Exento" || data.remark === "Imprevisto") sysText = "Normal (Exento L.T/Ext)";
-                    else if (data.remark === "Salida Ant.") sysText = "Normal (Exento Sal. Ant.)";
+                    if (isExento) sysText = "Normal (Exento L.T/Ext)";
+                    else if (isSalidaAnt) sysText = "Normal (Exento Sal. Ant.)";
                     else sysText = "Normal";
                 }
             }
@@ -805,11 +818,14 @@
                 }
             }
 
+            // 【核心修改点】正确统计带原因的分类
             let matchedLeave = false;
             if (data.remark) {
-                if (leaveCategories.includes(data.remark) || data.remark === "Imprevisto") {
-                    let cat = data.remark === "Imprevisto" ? "Exento" : data.remark;
-                    leaveCounts[cat]++; matchedLeave = true;
+                let baseCategory = leaveCategories.find(c => data.remark === c || data.remark.startsWith(c + " -"));
+                if (baseCategory) {
+                    leaveCounts[baseCategory]++; matchedLeave = true;
+                } else if (data.remark === "Imprevisto") {
+                    leaveCounts["Exento"]++; matchedLeave = true;
                 } else if (data.remark.trim() !== "") {
                     leaveCounts['Otro']++; matchedLeave = true;
                 }
@@ -875,13 +891,22 @@
 
             let recordHtml = data.adjustedRecord ? `<strong style="font-family:monospace; font-size:14px; color:var(--primary);">${data.adjustedRecord}</strong> <span style="color:var(--success);font-size:11px; font-weight:600;">(Mod)</span>` : `<strong style="font-family:monospace; font-size:14px;">${data.record || "<span style='color:var(--text-muted);font-weight:normal;'>(Vacío)</span>"}</strong>`;
             
+            // 【核心修改点】正确回显选中的类别和额外输入的原因
             let selValue = "", txtValue = "";
             if (data.remark) {
-                if (leaveCategories.includes(data.remark) || data.remark === "Imprevisto") selValue = data.remark === "Imprevisto" ? "Exento" : data.remark;
-                else { selValue = "Otro"; txtValue = data.remark; }
+                let baseCategory = leaveCategories.find(c => data.remark === c || data.remark.startsWith(c + " -"));
+                if (baseCategory) {
+                    selValue = baseCategory;
+                    if (data.remark.includes(" - ")) {
+                        txtValue = data.remark.split(" - ")[1]; // 提取横杠后面的原因
+                    }
+                } else if (data.remark === "Imprevisto") {
+                    selValue = "Exento";
+                } else {
+                    selValue = "Otro"; txtValue = data.remark;
+                }
             }
 
-            // 【修改点】选择框加入 Exento Salida Ant.
             let remarkHtml = `
                 <select id="rmk-sel-${index}" class="remark-select" onchange="handleRemarkChange(${index})">
                     <option value="">- Seleccionar -</option>
@@ -894,7 +919,7 @@
                     <option value="Salida Ant." ${selValue==='Salida Ant.'?'selected':''}>Exento Salida Ant.</option>
                     <option value="Otro" ${selValue==='Otro'?'selected':''}>Otro (Especifique)</option>
                 </select>
-                <input type="text" id="rmk-txt-${index}" placeholder="Ingrese motivo..." value="${txtValue}" style="display: ${selValue==='Otro'?'block':'none'}; width: 100%;">
+                <input type="text" id="rmk-txt-${index}" placeholder="Ingrese motivo..." value="${txtValue}" style="display: ${(selValue==='Otro' || selValue==='Exento' || selValue==='Salida Ant.') ? 'block' : 'none'}; width: 100%;">
             `;
 
             let actionHtml = "";
@@ -946,7 +971,6 @@
         document.getElementById('dash-leave-absent').innerText = `${result.leaveCounts['Falta']} Días`;
         document.getElementById('dash-bottom-late-days').innerText = `${result.dashLateDays} Días`;
         
-        // 【修改点】看板中加入 Salida Ant.
         document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['Exento'] + result.leaveCounts['Salida Ant.'] + result.leaveCounts['Otro']} Días`;
 
         let netEl = document.getElementById('dash-net');
@@ -1026,6 +1050,7 @@
                 else if (effRecord && effRecord.includes("-")) hoursHtml = `<span style="color:${isHoursMet ? '#10b981' : '#ef4444'}; font-weight:bold;">${Math.floor(workedMins/60)}h ${workedMins%60}m</span>`;
 
                 let recHtml = data.adjustedRecord ? `<strong>${data.adjustedRecord}</strong>` : `<strong>${data.record || ""}</strong>`;
+                // 【核心修改点】打印时如果带原因，也会完整显示
                 let rmkHtml = data.remark || `<span style="color:#94a3b8">-</span>`;
 
                 return `<tr style="${bgStyle}">
@@ -1039,7 +1064,6 @@
                 </tr>`;
             }).join('');
 
-            // 【修改点】打印报告中加入 Salida Ant.
             let leaveSummaryHTML = `
                 <div style="display:flex; justify-content:space-between; margin-top:15px; background:#fffbeb; padding:12px; border:1px solid #fde68a; border-radius:8px; font-size:13px;">
                     <div style="color:#b45309; font-weight:bold;">🏖️ Ausencias:</div>
@@ -1107,15 +1131,17 @@
 
     window.saveRemarkOnly = function(index) {
         const remark = getActualRemark(index);
-        if (document.getElementById(`rmk-sel-${index}`).value === "Otro" && !remark) { alert("¡Por favor, ingrese el motivo!"); return; }
+        const selVal = document.getElementById(`rmk-sel-${index}`).value;
+        if (selVal === "Otro" && !remark) { alert("¡Por favor, ingrese el motivo!"); return; }
         employeesData[currentSelectedEmployee][index].remark = remark;
         renderTable(currentSelectedEmployee); saveToLocalStorage();
     }
 
     window.confirmStatus = function(index, finalDecision) {
         const remark = getActualRemark(index);
-        if (finalDecision === 'EXCEPTION' && !remark) { alert("¡Debe seleccionar un estado o especificar un motivo para la anomalía!"); return; }
-        if (document.getElementById(`rmk-sel-${index}`).value === "Otro" && !remark) { alert("¡Por favor, ingrese el motivo!"); return; }
+        const selVal = document.getElementById(`rmk-sel-${index}`).value;
+        if (finalDecision === 'EXCEPTION' && !remark && selVal !== "Otro") { alert("¡Debe seleccionar un estado o especificar un motivo para la anomalía!"); return; }
+        if (selVal === "Otro" && !remark) { alert("¡Por favor, ingrese el motivo!"); return; }
         employeesData[currentSelectedEmployee][index].finalStatus = finalDecision;
         employeesData[currentSelectedEmployee][index].remark = remark;
         renderTable(currentSelectedEmployee); saveToLocalStorage();
