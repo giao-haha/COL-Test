@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Cálculo de Asistencia y Nómina v8.4</title>
+    <title>Sistema de Cálculo de Asistencia y Nómina v8.5</title>
     <!-- Biblioteca para analizar PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <!-- Biblioteca para analizar Excel (.xls, .xlsx) -->
@@ -194,7 +194,7 @@
 
 <div class="container">
     <h1>
-        <span>☁️ Sistema de Cálculo de Asistencia y Nómina v8.4</span>
+        <span>☁️ Sistema de Cálculo de Asistencia y Nómina v8.5</span>
         <div style="display: flex; gap: 10px;">
             <button class="btn btn-red" onclick="clearLocalData()" id="clearBtn">🗑️ Borrar</button>
             <button class="btn btn-warning" onclick="toggleSettings()" id="settingsBtn" style="display:none;">⚙️ Configuración</button>
@@ -202,7 +202,6 @@
         </div>
     </h1>
 
-    <!-- 设置面板 -->
     <div class="panel settings-panel" id="settingsPanel">
         <div class="settings-header">
             <h3 style="margin:0; color:#b45309; font-size: 18px;">📅 Configuración de Reglas</h3>
@@ -246,7 +245,6 @@
         <button class="btn btn-blue" onclick="saveSettings()" style="padding: 10px 24px; font-size: 14px;">💾 Guardar Configuración y Recalcular</button>
     </div>
 
-    <!-- 上传区域 -->
     <div class="upload-section">
         <div style="font-size: 40px; margin-bottom: 15px;">📁</div>
         <p style="font-size: 18px; font-weight: 600; color: var(--text-main); margin-bottom: 8px;">Subir archivo de asistencia</p>
@@ -257,7 +255,6 @@
         <div id="loading">⏳ Extrayendo datos y procesando formato, por favor espere...</div>
     </div>
 
-    <!-- 控制台 -->
     <div class="panel control-panel" id="controlPanel">
         <div class="employee-selector">
             <label for="empSelect">Seleccionar Empleado:</label>
@@ -269,7 +266,6 @@
         </div>
     </div>
 
-    <!-- 数据面板 -->
     <div class="panel dashboard-panel" id="dashboardPanel">
         <div class="dashboard-title">📊 Resumen Mensual de Asistencia</div>
         <div class="dashboard-grid">
@@ -284,7 +280,6 @@
         </div>
     </div>
 
-    <!-- 表格区域 -->
     <div class="table-container" id="tableContainer">
         <table id="attendanceTable">
             <thead>
@@ -303,7 +298,6 @@
         </table>
     </div>
 
-    <!-- 请假面板 -->
     <div class="panel" id="leaveDetailsPanel">
         <div class="dashboard-title" style="color: var(--text-main);">🏖️ Resumen de Permisos y Detalles</div>
         <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
@@ -311,6 +305,7 @@
             <div class="dash-card"><div class="title">Incapacidad</div><div class="value" id="dash-leave-sick" style="font-size: 20px;">0 Días</div></div>
             <div class="dash-card"><div class="title">Vacaciones</div><div class="value" id="dash-leave-vacation" style="font-size: 20px;">0 Días</div></div>
             <div class="dash-card"><div class="title">Día Festivo</div><div class="value" id="dash-leave-festival" style="font-size: 20px;">0 Días</div></div>
+            <div class="dash-card"><div class="title">Descanso</div><div class="value" id="dash-leave-descanso" style="font-size: 20px;">0 Días</div></div>
             <div class="dash-card"><div class="title">Falta</div><div class="value" id="dash-leave-absent" style="font-size: 20px;">0 Días</div></div>
             <div class="dash-card" style="background: #fef2f2; border-color: #fecaca;"><div class="title" style="color: var(--danger);">Días con Atraso/Sal. Ant.</div><div class="value val-red" id="dash-bottom-late-days" style="font-size: 20px;">0 Días</div></div>
             <div class="dash-card"><div class="title">Exento/Otros</div><div class="value" id="dash-leave-other" style="font-size: 20px;">0 Días</div></div>
@@ -329,7 +324,6 @@
     let splitMonthEnabled = false;   
     let splitDayThreshold = 15;      
 
-    // 【新增】加入 Descanso 到分类列表
     const leaveCategories = ["Permiso", "Incapacidad", "Vacaciones", "Día Festivo", "Descanso", "Falta", "Exento", "Salida Ant."];
     
     let globalSchedules = {
@@ -342,6 +336,16 @@
         'domingo': { in: "", out: "", in2: "", out2: "", name: "Domingo" }
     };
     let employeeSchedules = {}; 
+
+    // 【新增】辅助函数，用于补全时间格式 HH:mm
+    function padTime(timeStr) {
+        if (!timeStr) return "";
+        let parts = timeStr.split(":");
+        if (parts.length === 2) {
+            return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+        }
+        return timeStr;
+    }
 
     document.getElementById('fileInput').addEventListener('change', async function(e) {
         const file = e.target.files[0];
@@ -714,7 +718,6 @@
     window.handleRemarkChange = function(index) {
         const sel = document.getElementById(`rmk-sel-${index}`);
         const txt = document.getElementById(`rmk-txt-${index}`);
-        // 【注意】如果你也想让 Descanso 加原因，也可以把 'Descanso' 加进这里，目前保持不变。
         if (sel.value === 'Otro' || sel.value === 'Exento' || sel.value === 'Salida Ant.') { 
             txt.style.display = 'block'; 
             txt.focus(); 
@@ -742,7 +745,6 @@
         const records = employeesData[empName] || [];
         let dashNormal = 0, dashLateDays = 0, sumLateMins = 0, sumOTMins = 0, sumPenaltyMins = 0, sumWorkedMins = 0;
         
-        // 【新增】包含 Descanso 初始化
         let leaveCounts = { 'Permiso': 0, 'Incapacidad': 0, 'Vacaciones': 0, 'Día Festivo': 0, 'Descanso': 0, 'Falta': 0, 'Exento': 0, 'Salida Ant.': 0, 'Otro': 0 };
         let processedRows = [];
 
@@ -788,12 +790,11 @@
             if (isExento) { dailyLate = 0; dailyEarly = 0; dailyOT = 0; }
             if (isSalidaAnt) { dailyEarly = 0; }
             
-            // 【新增】Descanso 和 Día Festivo 一样清空考勤异常
             if (data.remark === "Día Festivo" || data.remark === "Descanso") { dailyLate = 0; dailyEarly = 0; dailyOT = 0; workedMins = 0; }
 
             let sysCode = "NORMAL", sysText = "Normal";
             if (data.remark === "Día Festivo") { sysCode = "NORMAL"; sysText = "Festivo (Pagado)"; }
-            else if (data.remark === "Descanso") { sysCode = "NORMAL"; sysText = "Descanso (Libre)"; } // 【新增】文字提示
+            else if (data.remark === "Descanso") { sysCode = "NORMAL"; sysText = "Descanso (Libre)"; } 
             else if (isRestDay) { sysCode = "WEEKEND"; sysText = dailyOT > 0 ? `Descanso (Ext ${dailyOT}m)` : "Día de Descanso"; }
             else if (!effRecord) { sysCode = "EMPTY"; sysText = "Sin Registro"; }
             else if (!effRecord.includes("-")) { sysCode = "PARTIAL"; sysText = "Falta Marcaje"; }
@@ -832,7 +833,6 @@
                 }
             }
 
-            // 【新增】如果备注了 Descanso 也计入全勤（像节假日一样）
             if (finalCode === 'NORMAL' || finalCode === 'OVERTIME' || (finalCode === 'LATE' && !data.finalStatus) || (finalCode === 'WEEKEND' && effRecord)) {
                 if (effRecord || data.remark === "Día Festivo" || data.remark === "Descanso") dashNormal++; 
                 sumLateMins += (dailyLate + dailyEarly); 
@@ -882,7 +882,6 @@
             let isHoursMet = isRestDay ? (workedMins > 0) : (workedMins >= reqMins);
             let hoursHtml = `<span class="empty-cell-text">-</span>`;
 
-            // 【新增】当备注是 Descanso 时，显示和 Día Festivo 一样的 0h 0m (Pagado)
             if (finalCode === 'EXCEPTION' && data.finalStatus) {
                 if (dailyPenalty > 0) hoursHtml = `<span style="color:var(--danger); font-weight:bold;">-${Math.floor(dailyPenalty/60)}h ${dailyPenalty%60}m</span> <span style="font-size:11px;color:var(--text-muted)">(Deducido)</span>`;
                 else hoursHtml = `<span style="color:#b45309; font-weight:bold;">0h 0m</span> <span style="font-size:11px;color:var(--text-muted)">(Exento)</span>`;
@@ -909,7 +908,6 @@
                 }
             }
 
-            // 【新增】下拉菜单中加入 Descanso
             let remarkHtml = `
                 <select id="rmk-sel-${index}" class="remark-select" onchange="handleRemarkChange(${index})">
                     <option value="">- Seleccionar -</option>
@@ -934,7 +932,25 @@
 
             if (!data.finalStatus) {
                 if (isComplete) {
-                    actionHtml = `<div><button class="btn btn-blue" onclick="saveRemarkOnly(${index})">💾 Guardar</button>${resetBtnHtml}</div>`;
+                    // 【核心修改点：加入强制修改时间的按钮和输入框】
+                    let parts = effRecord.split("-");
+                    let inVal = padTime(parts[0].trim());
+                    let outVal = padTime(parts[1].trim());
+
+                    actionHtml = `
+                        <div id="default-action-${index}">
+                            <button class="btn btn-blue" onclick="saveRemarkOnly(${index})">💾 Guardar</button>
+                            <button class="btn" style="background-color: var(--info); color: white;" onclick="document.getElementById('edit-punch-${index}').style.display='flex'; document.getElementById('default-action-${index}').style.display='none';">✏️ Editar Hora</button>
+                            ${resetBtnHtml}
+                        </div>
+                        <div id="edit-punch-${index}" style="display:none; align-items:center; gap:6px;">
+                            <input type="time" id="in-${index}" value="${inVal}" style="width: 100px;">
+                            <span style="color:#ccc">-</span>
+                            <input type="time" id="out-${index}" value="${outVal}" style="width: 100px;">
+                            <button class="btn btn-blue" onclick="savePunch(${index})">💾 Confirmar</button>
+                            <button class="btn" style="background-color: #94a3b8; color: white;" onclick="document.getElementById('edit-punch-${index}').style.display='none'; document.getElementById('default-action-${index}').style.display='flex';">❌</button>
+                        </div>
+                    `;
                 } else if (isPartial) {
                     let t = effRecord.replace(/[^\d:]/g, '');
                     let hour = t ? parseInt(t.split(':')[0], 10) : 0;
@@ -972,11 +988,11 @@
         document.getElementById('dash-leave-sick').innerText = `${result.leaveCounts['Incapacidad']} Días`;
         document.getElementById('dash-leave-vacation').innerText = `${result.leaveCounts['Vacaciones']} Días`;
         document.getElementById('dash-leave-festival').innerText = `${result.leaveCounts['Día Festivo']} Días`;
+        document.getElementById('dash-leave-descanso').innerText = `${result.leaveCounts['Descanso']} Días`;
         document.getElementById('dash-leave-absent').innerText = `${result.leaveCounts['Falta']} Días`;
         document.getElementById('dash-bottom-late-days').innerText = `${result.dashLateDays} Días`;
         
-        // 【新增】仪表盘中将 Descanso 归类到 Otras 中显示
-        document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['Exento'] + result.leaveCounts['Salida Ant.'] + result.leaveCounts['Descanso'] + result.leaveCounts['Otro']} Días`;
+        document.getElementById('dash-leave-other').innerText = `${result.leaveCounts['Exento'] + result.leaveCounts['Salida Ant.'] + result.leaveCounts['Otro']} Días`;
 
         let netEl = document.getElementById('dash-net');
         let pCard = netEl.parentElement;
@@ -1048,7 +1064,6 @@
                 let isHoursMet = isRestDay ? (workedMins > 0) : (workedMins >= reqMins);
                 let hoursHtml = `<span style="color:#94a3b8">-</span>`;
 
-                // 【新增】打印页面处理 Descanso
                 if (finalCode === 'EXCEPTION' && data.finalStatus) {
                     if (dailyPenalty > 0) hoursHtml = `<span style="color:#ef4444; font-weight:bold;">-${Math.floor(dailyPenalty/60)}h ${dailyPenalty%60}m</span>`;
                     else hoursHtml = `<span style="color:#b45309; font-weight:bold;">0h 0m</span>`;
@@ -1069,7 +1084,6 @@
                 </tr>`;
             }).join('');
 
-            // 【新增】在打印报告中单独加上 Descanso 的天数统计
             let leaveSummaryHTML = `
                 <div style="display:flex; justify-content:space-between; margin-top:15px; background:#fffbeb; padding:12px; border:1px solid #fde68a; border-radius:8px; font-size:13px;">
                     <div style="color:#b45309; font-weight:bold;">🏖️ Ausencias:</div>
